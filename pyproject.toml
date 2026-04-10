@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "jsonpysql"
@@ -32,4 +32,4 @@ addopts = "--cov=jsonpysql --cov-report=term-missing"
 source = ["jsonpysql"]
 
 [tool.coverage.report]
-fail_under = 95
+# 95% minimum enforced explicitly at gate steps (7 and 14) via --cov-fail-under=95
