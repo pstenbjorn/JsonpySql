@@ -293,17 +293,21 @@ class IndexManager:
     # ------------------------------------------------------------------
 
     def _find_index_for(self, field: str) -> tuple[SortedDict | None, IndexSpec | None]:
-        """Return the first index and spec that covers *field*.
+        """Return the first *single-field* index that covers *field*.
+
+        Compound indexes are maintained for write operations but are not
+        used for storage-level equality or range lookups, which take only
+        one field at a time.
 
         Args:
             field: Field name.
 
         Returns:
             Tuple of ``(SortedDict, IndexSpec)`` or ``(None, None)`` if no
-            index exists.
+            single-field index exists for *field*.
         """
         for i, spec in enumerate(self._specs):
-            if field in spec.fields:
+            if spec.fields == [field]:
                 return self._indexes[i], spec
         return None, None
 
