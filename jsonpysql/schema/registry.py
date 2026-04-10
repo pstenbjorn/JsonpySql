@@ -82,7 +82,16 @@ class CollectionManager:
             IndexSpec(fields=[f], unique=(f in unique))
             for f in indexed
         ]
-        self._engine.create_collection(name, specs, drop_if_exists=drop_if_exists)
+        # When reopening an existing database the collection already exists
+        # in the storage engine but is absent from this manager's in-memory
+        # registry.  In that case, skip create_collection to preserve data.
+        engine_has_it = name in self._engine._stores
+        if not engine_has_it:
+            self._engine.create_collection(name, specs)
+        elif drop_if_exists:
+            # User explicitly requested replacement — drop then recreate.
+            self._engine.drop_collection(name)
+            self._engine.create_collection(name, specs)
 
         fk_checkers = self._build_fk_checkers(name, model)
         col = SchemaCollection(name, model, self._engine, fk_checkers=fk_checkers)
@@ -118,7 +127,12 @@ class CollectionManager:
             self.drop_collection(name)
 
         specs = [IndexSpec(fields=[f]) for f in (indexes or [])]
-        self._engine.create_collection(name, specs, drop_if_exists=drop_if_exists)
+        engine_has_it = name in self._engine._stores
+        if not engine_has_it:
+            self._engine.create_collection(name, specs)
+        elif drop_if_exists:
+            self._engine.drop_collection(name)
+            self._engine.create_collection(name, specs)
 
         col = DocumentCollection(name, self._engine)
         self._doc_cols[name] = col
