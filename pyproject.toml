@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jsonpysql"
+version = "0.1.0"
+description = "Python-native embedded database engine with JSON storage and Python callables as first-class database objects"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.0",
+    "sortedcontainers",
+    "dill",
+]
+
+[project.optional-dependencies]
+msgpack = ["msgpack"]
+dev = [
+    "pytest",
+    "pytest-cov",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["jsonpysql*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=jsonpysql --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["jsonpysql"]
+
+[tool.coverage.report]
+# 95% minimum enforced explicitly at gate steps (7 and 14) via --cov-fail-under=95
