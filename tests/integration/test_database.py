@@ -14,6 +14,7 @@ from jsonpysql.database import Database, DatabaseStats
 from jsonpysql.exceptions import (
     CollectionExistsError,
     ReferentialIntegrityError,
+    SchemaError,
     StorageError,
     UniqueConstraintError,
     ValidationError,
@@ -108,6 +109,23 @@ class TestCollectionRegistration:
         db.register_collection("events", indexes=["type"])
         db.events.insert("e1", {"type": "click", "x": 10})
         result = list(db.events.where(lambda d: d["type"] == "click"))
+        assert len(result) == 1
+
+    def test_model_with_indexes_raises_schema_error(self, tmp_path: Path) -> None:
+        db = Database(tmp_path)
+        with pytest.raises(SchemaError):
+            db.register_collection("customers", Customer, indexes=["email"])
+
+    def test_model_without_indexes_still_indexes_from_metadata(
+        self, tmp_path: Path
+    ) -> None:
+        db = Database(tmp_path)
+        db.register_collection("customers", Customer)
+        db.customers.insert(
+            {"id": "c1", "email": "a@b.com", "name": "Alice", "age": 30}
+        )
+        # 'email' is field(index=True) on the model → index lookup works.
+        result = db.customers.where(lambda c: c["email"] == "a@b.com").to_list()
         assert len(result) == 1
 
     def test_duplicate_collection_raises(self, tmp_path: Path) -> None:

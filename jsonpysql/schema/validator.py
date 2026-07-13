@@ -35,20 +35,23 @@ class Validator:
 
         The document is parsed by the model (which performs type coercion
         and constraint checking) and then serialised back to a plain dict
-        via ``model_dump()``.
+        via ``model_dump(mode="json")``.  JSON mode ensures non-native
+        types (``datetime`` → ISO string, ``Enum`` → value, ``UUID`` →
+        str, ``Decimal`` → str) become JSON-serialisable, matching the
+        storage layer's "accepts any JSON-serializable dict" contract.
 
         Args:
             document: Raw key-value mapping to validate.
 
         Returns:
-            A validated, model-dumped dict.
+            A validated, JSON-native dict.
 
         Raises:
             ValidationError: If the document does not conform to the model.
         """
         try:
             instance = self._model.model_validate(document)
-            return instance.model_dump()
+            return instance.model_dump(mode="json")
         except _PydanticValidationError as exc:
             raise ValidationError(
                 f"Document failed validation against {self._model.__name__}: {exc}"

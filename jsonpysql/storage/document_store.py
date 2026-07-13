@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Iterator
 
 from jsonpysql.exceptions import StorageError
+from jsonpysql.utils.serialization import json_default
 
 # Sentinel key written on a delete operation.
 _DELETED_KEY = "_deleted"
@@ -173,7 +174,10 @@ class DocumentStore:
         try:
             with tmp.open("w", encoding="utf-8") as fh:
                 for doc in live_docs:
-                    fh.write(json.dumps(doc, ensure_ascii=False) + "\n")
+                    fh.write(
+                        json.dumps(doc, ensure_ascii=False, default=json_default)
+                        + "\n"
+                    )
             tmp.replace(self._path)
         except OSError as exc:
             try:
@@ -227,7 +231,10 @@ class DocumentStore:
         """
         try:
             with self._path.open("a", encoding="utf-8") as fh:
-                fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+                fh.write(
+                    json.dumps(record, ensure_ascii=False, default=json_default)
+                    + "\n"
+                )
         except OSError as exc:
             raise StorageError(f"Write failed for {self._path}: {exc}") from exc
 
