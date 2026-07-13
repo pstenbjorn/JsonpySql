@@ -25,6 +25,7 @@ Usage::
 
 from __future__ import annotations
 
+import functools
 from pathlib import Path
 from typing import Any, Callable
 
@@ -172,6 +173,51 @@ class _QueryableCollection:
     def name(self) -> str:
         """Collection name."""
         return self._col.name
+
+
+class _FunctionAccessor:
+    """Attribute-style accessor for registered functions and procedures.
+
+    Returned by ``Database.fn``.  Registered **functions** are returned
+    unchanged.  Registered **procedures** are returned with the owning
+    ``Database`` bound as their first argument (the database context), so
+    ``db.fn.my_procedure(args)`` matches ``Database.procedure``'s
+    documented contract.  Any other attribute (registry methods such as
+    ``list_functions``) is delegated to the underlying registry.
+
+    Args:
+        db: The owning ``Database`` instance, injected into procedures.
+        registry: The live ``FunctionRegistry``.
+    """
+
+    def __init__(self, db: Database, registry: FunctionRegistry) -> None:
+        self._db = db
+        self._registry = registry
+
+    def __getattr__(self, name: str) -> Any:
+        """Resolve *name* to a function, a db-bound procedure, or a
+        registry attribute.
+
+        Args:
+            name: Function name, procedure name, or registry attribute.
+
+        Returns:
+            The callable (procedures are bound to the database context).
+
+        Raises:
+            AttributeError: For private/dunder attribute names.
+            FunctionError: If *name* is not a registered function,
+                procedure, or registry attribute.
+        """
+        # Guard private/dunder to avoid recursion during attribute setup.
+        if name.startswith("_"):
+            raise AttributeError(name)
+        registry = self._registry
+        if name in registry._procedures:
+            # Inject the database context as the first positional argument.
+            return functools.partial(registry._procedures[name], self._db)
+        # Functions and registry methods pass through unchanged.
+        return getattr(registry, name)
 
 
 class Database:
@@ -374,12 +420,16 @@ class Database:
         return self._fn_registry.register_procedure(fn)
 
     @property
-    def fn(self) -> FunctionRegistry:
-        """The live function registry.
+    def fn(self) -> _FunctionAccessor:
+        """Attribute-style access to registered functions and procedures.
 
-        Allows ``db.fn.my_function(args)`` shorthand.
+        Functions are returned unchanged; procedures are returned with
+        this ``Database`` bound as their first argument (the database
+        context), so ``db.fn.my_procedure(args)`` invokes the procedure
+        as ``my_procedure(db, args)`` — matching ``Database.procedure``'s
+        documented contract.
         """
-        return self._fn_registry
+        return _FunctionAccessor(self, self._fn_registry)
 
     # ------------------------------------------------------------------
     # Statistics

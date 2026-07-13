@@ -372,7 +372,71 @@ class TestFunctionRegistry:
         def noop(ctx: object) -> str:
             return "ok"
 
-        assert db.fn.noop(None) == "ok"
+        # The db context is injected automatically as the first argument.
+        assert db.fn.noop() == "ok"
+
+    def test_procedure_receives_db_context(self, db: Database) -> None:
+        """db.fn.<procedure>() injects the owning Database as db_ctx."""
+
+        @db.procedure
+        def whoami(db_ctx: object) -> bool:
+            return db_ctx is db
+
+        assert db.fn.whoami() is True
+
+    def test_procedure_can_use_db_context(self, db: Database) -> None:
+        """A procedure operates across collections via the injected db."""
+        db.customers.insert(
+            {"id": "c1", "email": "a@b.com", "name": "Alice", "age": 30}
+        )
+
+        @db.procedure
+        def place_order(db_ctx: object, order_id: str, customer_id: str, total: float) -> str:
+            db_ctx.orders.insert(
+                {"id": order_id, "customer_id": customer_id, "total": total}
+            )
+            return order_id
+
+        result = db.fn.place_order("o1", "c1", 42.0)
+        assert result == "o1"
+        assert db.orders.get("o1")["total"] == 42.0
+
+    def test_procedure_with_extra_args(self, db: Database) -> None:
+        """Positional args after db_ctx are forwarded correctly."""
+
+        @db.procedure
+        def add(db_ctx: object, a: int, b: int) -> int:
+            return a + b
+
+        assert db.fn.add(2, 3) == 5
+
+    def test_function_via_accessor_unchanged(self, db: Database) -> None:
+        """Functions are NOT passed a db context — only procedures are."""
+
+        @db.function
+        def triple(x: int) -> int:
+            return x * 3
+
+        assert db.fn.triple(4) == 12
+
+    def test_fn_accessor_delegates_registry_methods(self, db: Database) -> None:
+        """Registry helpers (e.g. list_procedures) remain reachable."""
+
+        @db.procedure
+        def proc(db_ctx: object) -> None:
+            return None
+
+        assert "proc" in db.fn.list_procedures()
+
+    def test_procedure_survives_reopen_with_context(self, tmp_path: Path) -> None:
+        db1 = Database(tmp_path)
+
+        @db1.procedure
+        def ping(db_ctx: object) -> str:
+            return "pong"
+
+        db2 = Database(tmp_path)
+        assert db2.fn.ping() == "pong"
 
 
 # ---------------------------------------------------------------------------

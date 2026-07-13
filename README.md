@@ -466,8 +466,9 @@ def place_order(db_ctx, customer_id: str, items: list) -> str:
         })
     return order_id
 
-# Call via db.fn
-order_id = db.fn.place_order(db, "c1", [{"price": 10.0, "qty": 3}])
+# Call via db.fn — the db_ctx argument is injected automatically,
+# so you pass only the remaining arguments.
+order_id = db.fn.place_order("c1", [{"price": 10.0, "qty": 3}])
 ```
 
 ### Listing registered callables
