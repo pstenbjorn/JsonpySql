@@ -90,21 +90,33 @@ class SchemaCollection:
     def update(self, doc_id: str, document: dict[str, Any]) -> None:
         """Validate and replace the document identified by *doc_id*.
 
+        ``update`` is replace-only: it never creates a new document.  If no
+        document with *doc_id* exists, ``StorageError`` is raised rather
+        than silently appending a new row (which would leave the collection
+        with duplicate logical ids).
+
         Args:
             doc_id: Identifier of the document to replace.
             document: New document data (complete replacement).
 
         Raises:
+            StorageError: If no document with *doc_id* exists.
             ValidationError: If the document does not match the schema.
             UniqueConstraintError: If a unique field value conflicts.
             ReferentialIntegrityError: If a FK reference is not satisfied.
         """
         validated = self._validator.validate(document)
+        old_doc = self._engine.get(self._name, doc_id)
+        if old_doc is None:
+            raise StorageError(
+                f"Cannot update {doc_id!r} in collection {self._name!r}: "
+                f"no such document. update() replaces existing documents "
+                f"only; use insert() to create a new one."
+            )
         self._unique_checker.check_update(doc_id, validated)
         for checker in self._fk_checkers.values():
             checker.check_child_insert(validated)
-        old_doc = self._engine.get(self._name, doc_id)
-        self._unregister_fk_reverse(doc_id, old_doc or {})
+        self._unregister_fk_reverse(doc_id, old_doc)
         self._engine.update(self._name, doc_id, validated)
         self._register_fk_reverse(doc_id, validated)
 

@@ -168,17 +168,31 @@ def get_fk_meta(info: FieldInfo) -> ForeignKeyMeta | None:
 def get_primary_key_field(model: type) -> str | None:
     """Return the name of the primary-key field of *model*, or ``None``.
 
+    Resolution order:
+
+    1. A field explicitly marked ``field(primary_key=True)``.
+    2. Convention fallback: a field literally named ``"id"``.
+
+    The convention fallback keeps ``insert()`` (which keys the stored
+    document by its primary key) and ``update(doc_id, ...)`` (which keys
+    by the caller-supplied id) in agreement.  Without it, a model that has
+    an ``id`` field but no declared primary key would have inserts keyed by
+    a random UUID while updates key by ``id`` — silently creating duplicate
+    rows on update.
+
     Args:
         model: A Pydantic ``BaseModel`` subclass.
 
     Returns:
-        The field name marked ``primary_key=True``, or ``None`` if no such
-        field exists.
+        The primary-key field name, or ``None`` if the model has neither a
+        ``primary_key=True`` field nor a field named ``"id"``.
     """
     for name, info in model.model_fields.items():
         meta = get_field_meta(info)
         if meta and meta.primary_key:
             return name
+    if "id" in model.model_fields:
+        return "id"
     return None
 
 

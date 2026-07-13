@@ -114,6 +114,8 @@ class Order(BaseModel):
 
 All other kwargs are forwarded to `pydantic.Field()`.
 
+**Primary key by convention:** if no field is marked `primary_key=True` but the model has a field literally named `id`, that `id` field is used as the primary key. This keeps `insert()` and `update()` keyed consistently. A model with neither a declared primary key nor an `id` field gets an auto-generated UUID as its document id on insert.
+
 ### `foreign_key()` parameters
 
 | Parameter | Type | Default | Description |
@@ -220,6 +222,8 @@ db.customers.update("c1", {
     "country": "NO",
 })
 ```
+
+`update()` on a `SchemaCollection` is **replace-only**: if no document with the given id exists it raises `StorageError` rather than creating a new row. Use `insert()` to add new documents.
 
 ### Delete
 

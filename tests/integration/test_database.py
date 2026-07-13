@@ -216,6 +216,76 @@ class TestCRUD:
 
 
 # ---------------------------------------------------------------------------
+# update() semantics — issue #4: no duplicate rows, replace-only
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateSemantics:
+    def test_update_without_declared_pk_does_not_duplicate(
+        self, tmp_path: Path
+    ) -> None:
+        """Issue #4 repro: a model with an 'id' field but no declared PK.
+
+        insert() then update() must leave exactly one row, not two.
+        """
+
+        class Doc(BaseModel):  # note: no field(primary_key=True)
+            id: str
+            n: int
+
+        db = Database(tmp_path)
+        db.register_collection("docs", model=Doc)
+
+        db.docs.insert({"id": "a", "n": 1})
+        db.docs.update("a", {"id": "a", "n": 2})
+
+        rows = db.docs.all()
+        assert len(rows) == 1
+        assert rows[0]["n"] == 2
+        assert db.docs.get("a")["n"] == 2
+
+    def test_id_field_becomes_primary_key_by_convention(
+        self, tmp_path: Path
+    ) -> None:
+        """insert() keys the document by its 'id' field, not a random UUID."""
+
+        class Doc(BaseModel):
+            id: str
+            n: int
+
+        db = Database(tmp_path)
+        db.register_collection("docs", model=Doc)
+        doc_id = db.docs.insert({"id": "a", "n": 1})
+        assert doc_id == "a"
+
+    def test_update_missing_document_raises(self, db: Database) -> None:
+        """update() is replace-only: updating a missing id raises."""
+        with pytest.raises(StorageError):
+            db.customers.update(
+                "ghost", {"id": "ghost", "email": "g@x.com", "name": "G", "age": 40}
+            )
+
+    def test_update_missing_does_not_create_row(self, db: Database) -> None:
+        """A failed update must not leave a partial/new row behind."""
+        with pytest.raises(StorageError):
+            db.customers.update(
+                "ghost", {"id": "ghost", "email": "g@x.com", "name": "G", "age": 40}
+            )
+        assert db.customers.get("ghost") is None
+        assert db.customers.all() == []
+
+    def test_update_existing_still_replaces_in_place(self, db: Database) -> None:
+        db.customers.insert({"id": "c1", "email": "a@b.com", "name": "Alice", "age": 28})
+        db.customers.update(
+            "c1", {"id": "c1", "email": "a@b.com", "name": "Alicia", "age": 29}
+        )
+        rows = db.customers.all()
+        assert len(rows) == 1
+        assert rows[0]["name"] == "Alicia"
+        assert rows[0]["age"] == 29
+
+
+# ---------------------------------------------------------------------------
 # Fluent query API
 # ---------------------------------------------------------------------------
 
