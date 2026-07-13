@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any, Iterator, Literal
 
 from jsonpysql.exceptions import StorageError, WALReplayError
+from jsonpysql.utils.serialization import json_default
 
 Op = Literal["insert", "update", "delete"]
 
@@ -113,7 +114,12 @@ class WAL:
         """
         try:
             with self._path.open("a", encoding="utf-8") as fh:
-                fh.write(json.dumps(entry.to_dict(), ensure_ascii=False) + "\n")
+                fh.write(
+                    json.dumps(
+                        entry.to_dict(), ensure_ascii=False, default=json_default
+                    )
+                    + "\n"
+                )
         except OSError as exc:
             raise StorageError(f"WAL write failed ({self._path}): {exc}") from exc
 
