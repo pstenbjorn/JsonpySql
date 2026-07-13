@@ -30,7 +30,7 @@ from typing import Any, Callable
 
 from pydantic import BaseModel
 
-from jsonpysql.exceptions import StorageError
+from jsonpysql.exceptions import SchemaError, StorageError
 from jsonpysql.query.builder import QueryBuilder
 from jsonpysql.schema.collection import DocumentCollection, SchemaCollection
 from jsonpysql.schema.functions import FunctionRegistry
@@ -217,18 +217,33 @@ class Database:
         """Register a new collection.
 
         When *model* is provided, a schema-backed ``SchemaCollection`` is
-        created.  Otherwise a schema-free ``DocumentCollection`` is
-        created with optional *indexes*.
+        created and its indexes are derived from the model's
+        ``field(index=True)`` / ``field(unique=True)`` metadata.  Otherwise
+        a schema-free ``DocumentCollection`` is created with the optional
+        *indexes* list.
 
         Args:
             name: Collection name.  Must be a valid Python identifier.
             model: Optional Pydantic ``BaseModel`` subclass.
-            indexes: Optional list of field names to index (document
-                collections only).
+            indexes: Optional list of field names to index.  Only valid for
+                document collections (when *model* is ``None``); schema
+                collections declare indexes via ``field(index=True)``.
             drop_if_exists: When ``True``, silently replace an existing
                 collection of the same name.
+
+        Raises:
+            SchemaError: If both *model* and *indexes* are supplied.  A
+                schema collection's indexes come from its model metadata,
+                so passing *indexes* alongside a model would be silently
+                ignored — this is rejected rather than dropped.
         """
         if model is not None:
+            if indexes is not None:
+                raise SchemaError(
+                    f"Cannot pass indexes={indexes!r} when registering schema "
+                    f"collection {name!r} with a model. Declare indexes on the "
+                    f"model with field(index=True) instead."
+                )
             self._manager.register_schema_collection(
                 name, model, drop_if_exists=drop_if_exists
             )
